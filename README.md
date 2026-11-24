@@ -522,9 +522,15 @@ The episode loop ([run.py](guava/real/run.py)) follows the Guava-4B evaluation p
 first-turn tool listing, table-aligned coordinates, an observation after every action,
 first-tool-call parsing, and temperature 0.
 
-**1. Robot workstation** (see the pixi_fer_ros2 README, section *Guava*):
+**1. Robot workstation.** The robot side is included as the submodule
+[third_party/pixi_fer_ros2](third_party/pixi_fer_ros2) (branch `feat/guava-bridge`; see its
+README, section *Guava*), so one clone of this repository is enough:
 
 ```bash
+git clone https://github.com/norips/guava-release.git && cd guava-release
+git submodule update --init --recursive third_party/pixi_fer_ros2
+cd third_party/pixi_fer_ros2
+pixi run -e jazzy setup                  # once: dependencies, CRISP, colcon build
 pixi run -e jazzy franka robot_ip:=<robot-ip>
 pixi run -e camera guava-wrist-camera    # wrist RealSense, depth aligned to color
 pixi run -e jazzy-crisp guava-bridge     # homes the arm, then serves on :8765

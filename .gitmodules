@@ -8,3 +8,7 @@
 [submodule "third_party/GraspGen"]
 	path = third_party/GraspGen
 	url = https://github.com/NVlabs/GraspGen
+[submodule "third_party/pixi_fer_ros2"]
+	path = third_party/pixi_fer_ros2
+	url = https://github.com/norips/pixi_fer_ros2.git
+	branch = feat/guava-bridge
