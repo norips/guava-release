@@ -552,9 +552,9 @@ Set `bridge_url` in `configs/real/franka.yaml` to the robot workstation.
 **3. Calibrate and check** (again whenever the camera or the table moves):
 
 ```bash
-.venv/bin/python -m guava.real.calibrate --marker-size 0.05   # ArUco on the table -> wrist camera extrinsics
-.venv/bin/python -m guava.real.check --object "red cube"      # overlay.png, table_z, SAM3 localization
-.venv/bin/python -m guava.real.check --hover "red cube"       # TCP 10 cm above the object
+.venv-eval/bin/python -m guava.real.calibrate --marker-size 0.05   # ArUco on the table -> wrist camera extrinsics
+.venv-eval/bin/python -m guava.real.check --object "red cube"      # overlay.png, table_z, SAM3 localization
+.venv-eval/bin/python -m guava.real.check --hover "red cube"       # TCP 10 cm above the object
 ```
 
 Lay the marker flat on the table, in view from the home pose, before running `calibrate`.
@@ -565,7 +565,7 @@ green grid must lie on the tabletop.
 **4. Run episodes:**
 
 ```bash
-.venv/bin/python -m guava.real.run --task "Put the lemon in the bin." \
+.venv-eval/bin/python -m guava.real.run --task "Put the lemon in the bin." \
   --output runs/real/lemon_in_bin --episodes 10
 ```
 

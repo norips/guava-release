@@ -12,7 +12,7 @@ The mode follows `camera` in the Guava config:
    current pose with --no-home (e.g. after `pose-gui`).
 3. Run, on the Guava workstation:
 
-    .venv/bin/python -m guava.real.calibrate --config configs/real/franka.yaml --marker-size 0.05
+    .venv-eval/bin/python -m guava.real.calibrate --config configs/real/franka.yaml --marker-size 0.05
 
 The arm visits --samples poses around the start pose (+-8 cm, +-20 deg), detects the marker in the
 full-resolution color image and solves AX=XB. The resulting extrinsics are printed as YAML for `camera.extrinsics` of the bridge config (pixi_fer_ros2/config/guava/bridge.yaml);

@@ -8,7 +8,7 @@ temperature 0. Only the simulator is replaced by the robot bridge.
 
 Example (servers: robot bridge, SAM3 on :8114, vLLM on :8000):
 
-    .venv/bin/python -m guava.real.run --config configs/real/franka.yaml \\
+    .venv-eval/bin/python -m guava.real.run --config configs/real/franka.yaml \\
         --task "Pick up the carrot from the table." --output runs/real/carrot --episodes 3
 
 Safety: keep a hand on the Franka user stop. With --confirm (default) every physical

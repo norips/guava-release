@@ -9,6 +9,11 @@ frame. Relative to the Franka ``panda_hand_tcp`` frame (franka_description, used
 * translation: the eef origin is 6.9 mm closer to the flange
   (robosuite: link7 -> eef = 0.1065 + 0.097 = 0.2035 m, URDF: link7 -> tcp = 0.107 + 0.1034 = 0.2104 m).
 
+Checked against robosuite at random joint configurations: rotation error < 0.03 deg. Positions differ
+by a constant 10 mm in z only because the simulator's "base" (fixed_mount0_base) is 1 cm above the
+Franka link0 used by CRISP; the model only sees table-relative heights (table_z is measured in the real
+base frame), so this does not change model-facing coordinates.
+
 Camera
 ------
 The simulator renders 512x512 images. Real frames are center-cropped to a square and resized,

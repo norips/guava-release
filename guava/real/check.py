@@ -1,6 +1,6 @@
 """Bring-up checks for the real-robot setup. Run each time the camera or the table moves.
 
-    .venv/bin/python -m guava.real.check --config configs/real/franka.yaml [--object carrot] [--hover carrot]
+    .venv-eval/bin/python -m guava.real.check --config configs/real/franka.yaml [--object carrot] [--hover carrot]
 
 Writes to --output (default runs/real/check):
   overlay.png   model-resolution image with the projected TCP (red cross) and the configured
