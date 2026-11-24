@@ -82,3 +82,44 @@ def square_resize(rgb: np.ndarray, depth: np.ndarray, K: np.ndarray, size: int,
     K2[0, 2] = (K[0, 2] + 0.5 - x0) * sx - 0.5
     K2[1, 2] = (K[1, 2] + 0.5 - y0) * sy - 0.5
     return rgb_r.copy(), dep_r.astype(np.float32).copy(), K2
+
+
+# --------------------------------------------------------------------------------------------------
+# Wrist camera helpers
+# --------------------------------------------------------------------------------------------------
+
+# Orientation of the simulator `frontview` camera (OpenCV convention: x right, y down, z forward) in the
+# robot base frame (robosuite table_arena.xml, MuJoCo quat wxyz 0.56 0.43 0.43 0.56; MuJoCo cameras
+# look along -z with y up). align() resolves top/left/right/front/back in this view, so a wrist camera
+# looking down gets the same directions as in training.
+FRONTVIEW_R_BASE_CAM = (Rotation.from_quat([0.43, 0.43, 0.56, 0.56]).as_matrix()
+                        @ np.diag([1.0, -1.0, -1.0]))
+FRONTVIEW_R_BASE_CAM = Rotation.from_matrix(FRONTVIEW_R_BASE_CAM).as_matrix()  # re-orthonormalize
+
+
+def rotate_k90(rgb: np.ndarray, depth: np.ndarray, K: np.ndarray, T_base_cam: np.ndarray, k: int):
+    """Rotate the image by k * 90 deg counter-clockwise (np.rot90) and update K and the camera pose so
+    that unprojected points are unchanged."""
+    k %= 4
+    K = K.astype(np.float64).copy()
+    T = T_base_cam.astype(np.float64).copy()
+    M = np.eye(4)
+    M[:3, :3] = [[0, -1, 0], [1, 0, 0], [0, 0, 1]]  # p_cam = M p_cam' for one CCW turn
+    for _ in range(k):
+        w = rgb.shape[1]
+        rgb, depth = np.rot90(rgb), np.rot90(depth)
+        K = np.array([[K[1, 1], 0, K[1, 2]], [0, K[0, 0], w - 1 - K[0, 2]], [0, 0, 1]])
+        T = T @ M
+    return np.ascontiguousarray(rgb), np.ascontiguousarray(depth), K, T
+
+
+def auto_rotation_k(T_base_cam: np.ndarray) -> int:
+    """Quarter turns that make the image 'up' point toward the robot base (-x), as in the sim front view,
+    so 'left' / 'right' in the image match the training camera."""
+    R = T_base_cam[:3, :3]
+    ups = []
+    for k in range(4):
+        up = -R[:, 1]  # image up (camera -y) in base
+        ups.append(-up[0])
+        R = R @ np.array([[0, -1, 0], [1, 0, 0], [0, 0, 1]])
+    return int(np.argmax(ups))

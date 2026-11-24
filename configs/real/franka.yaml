@@ -8,6 +8,19 @@ model: AIcell/guava-v13b-qwen3.5-4b      # served model name in vLLM
 # `python -m guava.real.check` prints an estimate from the depth image.
 table_z: 0.0
 
+# Camera (must match `camera.mount` of the bridge config)
+#   wrist: RealSense on the hand. Every new picture is taken from `observation_joints` (default: home_joints):
+#          the arm lifts to transit_height, goes there, takes the picture and comes back the same way.
+#          The picture is reused until the robot acts again.
+#   fixed: static third-person camera.
+camera: wrist
+observation_joints: null     # null = home_joints
+return_after_capture: true   # false: stay at the observation pose (tools then act from there)
+transit_height: 0.20         # [m] above the table
+capture_settle: 0.5          # [s]
+image_rotation: auto         # 0/90/180/270 deg CCW, auto = image top toward the robot (like the sim front view)
+frontview_align: auto        # resolve align() directions in the sim front view (auto: on for the wrist camera)
+
 image_size: 512          # simulator resolution the model was trained on
 crop: null               # [x0, y0, w, h] in the camera image; null = centered square
 max_depth: 2.5           # [m]

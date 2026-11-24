@@ -116,6 +116,7 @@ def run_episode(ctx, client, args, cfg, system_prompt: str, folder: Path) -> dic
         print("[real] homing and opening the gripper ...")
         ctx.arm.home_pose()
         ctx.env.bridge.open_gripper()
+    ctx.env.mark_moved()  # the scene was reset by hand: never reuse a picture from the previous episode
     ctx.arm.init_orientation()
     ctx.was_holding = False
 

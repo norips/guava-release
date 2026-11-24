@@ -495,13 +495,13 @@ demonstrations.
 
 `guava/real/` runs the same nine tools on a real Franka Panda driven by
 [pixi_fer_ros2](https://github.com/norips/pixi_fer_ros2) (ROS 2 Jazzy, CRISP impedance
-controllers, Franka Hand, RealSense). The simulator is replaced by a small HTTP bridge, so
-this repository still needs no ROS installation:
+controllers, Franka Hand, RealSense on the hand). The simulator is replaced by a small HTTP
+bridge, so this repository still needs no ROS installation:
 
 ```text
 robot workstation (pixi_fer_ros2)              GPU workstation (this repo)
 franka.launch.py ─┐                            vLLM :8000 (Guava-4B)   SAM3 :8114
-RealSense driver ─┼─ guava-bridge :8765  ◀──── guava.real.run  (prompt, tools, logs)
+wrist RealSense ──┼─ guava-bridge :8765  ◀──── guava.real.run  (prompt, tools, logs)
 gripper actions ──┘   (cartesian moves, rgbd)
 ```
 
@@ -512,7 +512,9 @@ What changes from simulation, and why:
 | robosuite `gripper0_right_eef` | `panda_hand_tcp` · Rz(−90°), shifted 6.9 mm toward the flange, so poses and rotations the model sees are identical ([frames.py](guava/real/frames.py)) |
 | IK + joint interpolation | straight-line target for the CRISP cartesian impedance controller; a move that does not converge reports `blocked …` and holds the pose |
 | stall detection on finger joints | Franka Hand grasp action; `grasped` if the fingers stop more than 3 mm apart |
-| 512×512 rendered RGB-D | RealSense color + aligned depth, center-cropped and resized to 512×512 with matching intrinsics |
+| fixed `frontview` camera, rendered after every action | wrist RealSense: for each new picture the arm lifts to `transit_height`, goes to the home (observation) pose, takes the picture and comes back the same way; the picture is reused until the robot acts again |
+| 512×512 RGB-D | color + aligned depth, turned so the image top points toward the robot (left/right as in the front view), center-cropped and resized to 512×512 with matching intrinsics |
+| `align` directions in the camera frame | resolved in the simulator front-view frame, since a camera looking down has no "front" / "top" in its own frame |
 | table offset from the scene model | `table_z` in [configs/real/franka.yaml](configs/real/franka.yaml) (estimated by `guava.real.check`) |
 
 The episode loop ([run.py](guava/real/run.py)) follows the Guava-4B evaluation protocol
@@ -524,7 +526,7 @@ first-tool-call parsing, and temperature 0.
 
 ```bash
 pixi run -e jazzy franka robot_ip:=<robot-ip>
-pixi run -e camera guava-camera          # third-person RealSense, depth aligned to color
+pixi run -e camera guava-wrist-camera    # wrist RealSense, depth aligned to color
 pixi run -e jazzy-crisp guava-bridge     # homes the arm, then serves on :8765
 ```
 
@@ -544,14 +546,15 @@ Set `bridge_url` in `configs/real/franka.yaml` to the robot workstation.
 **3. Calibrate and check** (again whenever the camera or the table moves):
 
 ```bash
-.venv/bin/python -m guava.real.calibrate --marker-size 0.05   # ArUco on the hand -> camera extrinsics
+.venv/bin/python -m guava.real.calibrate --marker-size 0.05   # ArUco on the table -> wrist camera extrinsics
 .venv/bin/python -m guava.real.check --object "red cube"      # overlay.png, table_z, SAM3 localization
 .venv/bin/python -m guava.real.check --hover "red cube"       # TCP 10 cm above the object
 ```
 
-Paste the extrinsics printed by `calibrate` into the bridge config and restart the bridge.
-In `runs/real/check/overlay.png`, the red cross (projected TCP) must sit between the
-fingertips and the green grid on the tabletop.
+Lay the marker flat on the table, in view from the home pose, before running `calibrate`.
+Paste the extrinsics it prints (the camera pose in `panda_hand_tcp`) into the bridge config
+and restart the bridge. In `runs/real/check/overlay.png`, taken from the home pose, the
+green grid must lie on the tabletop.
 
 **4. Run episodes:**
 
@@ -566,19 +569,15 @@ the arm. After each episode you are asked whether the task succeeded. Logs, imag
 per-call latency go to `runs/real/<name>/episode_XXX/`. Keep the Franka user stop at hand:
 the bridge rejects targets outside its safety box, but it does not check collisions.
 
-Camera placement matters: the model was trained on the simulator `frontview`, about
-2.2 m in front of the robot base and 0.65 m above the table, looking back at the robot.
-Place the real camera on that side, with the whole workspace in view. Depth quality
-drives grasp accuracy. A D405 is specified for 7–50 cm, so at a front-view distance a
-D435/D455-class camera, or a closer D405 with a narrower view, will localize much better.
-
-![Zero-shot real-world evaluation on nine tasks: GPT-5.4 achieves 93.3% overall success, Qwen3.5-4B 28.9%, and Guava-4B 90.0%.](assets/images/guava_realworld_arxiv.png)
-
-The qualitative demonstrations include retrying a grasp after an object moves
-and recovering from a controller abort after contact with a box rim. In the
-latter example, Guava moves the gripper sideways to clear the obstruction and
-then resumes placement; this controller-specific interruption was not included
-in the simulation training data.
+The camera's field of view decides what the model can see. The model was trained on the
+simulator `frontview`, a view of the whole table from the front. From the Guava home pose,
+the TCP is only about 0.19 m above the table, so a wrist D405 sees roughly 0.3 m of table
+after the square crop. Objects outside that patch are invisible to the model and to SAM3.
+Set a higher `observation_joints` in `configs/real/franka.yaml` (for example, with the TCP
+0.4–0.5 m above the table, still within the D405's range) when the task needs more of the
+table. The view stays top-down, unlike the training front view. Image orientation and `align`
+directions are matched to that view, but expect some loss compared with the paper's real-robot
+results. Set `camera: fixed` (and `mount: fixed` on the bridge) to use a third-person camera instead.
 
 <a id="citation"></a>
 

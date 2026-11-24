@@ -233,6 +233,23 @@ def _compute_align_target(
     return target
 
 
+def _align_view(ctx: "ToolContext", pc_cam: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Points and view->base pose in which align() resolves top/left/right/front/back.
+
+    Default: the observation camera. A backend whose camera does not look like the training view
+    (e.g. a wrist camera looking down, guava.real) exposes `align_view_R` (3x3, view axes in the base
+    frame) and the directions are resolved in that virtual view instead.
+    """
+    R_view = getattr(ctx.env, "align_view_R", None)
+    if R_view is None:
+        return pc_cam, ctx.last_pose_mat
+    T_view = np.eye(4)
+    T_view[:3, :3] = R_view
+    T_view[:3, 3] = ctx.last_pose_mat[:3, 3]
+    T = np.linalg.inv(T_view) @ ctx.last_pose_mat  # cam -> view
+    return pc_cam @ T[:3, :3].T + T[:3, 3], T_view
+
+
 def _gripper_state_text(ctx: "ToolContext") -> str:
     """One-line summary of current gripper pose and width for LLM context."""
     pos = list(ctx.arm.position())
@@ -879,8 +896,9 @@ def align(ctx: ToolContext, target_name: str, position: str, clearance: str) -> 
     obj_extents = [round(float(v), 3) for v in (pc_base.max(axis=0) - pc_base.min(axis=0))]
 
     current_z  = ctx.arm.position()[2]
+    pc_view, view_pose = _align_view(ctx, pc_segment)
     target_pos = _compute_align_target(
-        pc_segment, position, _CLEARANCE_M[clearance], ctx.last_pose_mat, current_z
+        pc_view, position, _CLEARANCE_M[clearance], view_pose, current_z
     )
 
     if ctx.bbox_debug_dir is not None:
@@ -894,7 +912,7 @@ def align(ctx: ToolContext, target_name: str, position: str, clearance: str) -> 
     if position in _SIDE_POSITIONS:
         # Reset roll/pitch, then rotate yaw so wide face points toward object.
         ctx.arm.align_down()
-        base_dir = ctx.last_pose_mat[:3, :3] @ _CAM_APPROACH_DIR[position]
+        base_dir = view_pose[:3, :3] @ _CAM_APPROACH_DIR[position]
         approach_angle = np.arctan2(base_dir[1], base_dir[0])
         desired_yaw = approach_angle - _WIDE_FACE_YAW_OFFSET
         _, cur_quat = ctx.env.eef_pose_base()
