@@ -45,6 +45,10 @@ def _encode(rgb: np.ndarray) -> str:
 
 def _refresh(ctx: ToolContext) -> None:
     """Pull latest camera obs into ctx with a single render call for RGB + depth."""
+    capture = getattr(ctx.env, "capture_rgbd", None)
+    if capture is not None:  # real-robot backend (guava.real.env.RealEnv)
+        ctx.last_rgb, ctx.last_depth, ctx.last_K, ctx.last_pose_mat = capture()
+        return
     # mj_step integrates qpos after computing body/camera poses. Synchronize
     # derived poses before recording an observation or a branch checkpoint.
     ctx.env.rob.sim.forward()
@@ -342,6 +346,8 @@ _bbox_call_count: dict[str, int] = {}
 
 def _get_base_to_world(env) -> np.ndarray:
     """Return the 4×4 transform from robot base frame to world (sim) frame."""
+    if not hasattr(env, "rob"):  # real robot: the base frame is the world frame
+        return np.eye(4)
     sim = env.rob.sim
     base_id = sim.model.body_name2id("fixed_mount0_base")
     T = np.eye(4, dtype=np.float64)

@@ -489,8 +489,88 @@ For YAML-driven collection, set top-level `record_video: true` and `video_fps: 2
 ## 🦾 Real-world deployment
 
 See the [project page](https://guava-harness.github.io/#results) for real-world
-demonstrations. Physical-robot operation code is not included in this repository;
-deployment requires an implementation adapted to your own robot setup.
+demonstrations.
+
+### Running Guava on a Franka Panda (ROS 2 + CRISP)
+
+`guava/real/` runs the same nine tools on a real Franka Panda driven by
+[pixi_fer_ros2](https://github.com/norips/pixi_fer_ros2) (ROS 2 Jazzy, CRISP impedance
+controllers, Franka Hand, RealSense). The simulator is replaced by a small HTTP bridge, so
+this repository still needs no ROS installation:
+
+```text
+robot workstation (pixi_fer_ros2)              GPU workstation (this repo)
+franka.launch.py ─┐                            vLLM :8000 (Guava-4B)   SAM3 :8114
+RealSense driver ─┼─ guava-bridge :8765  ◀──── guava.real.run  (prompt, tools, logs)
+gripper actions ──┘   (cartesian moves, rgbd)
+```
+
+What changes from simulation, and why:
+
+| Simulation | Real robot |
+| --- | --- |
+| robosuite `gripper0_right_eef` | `panda_hand_tcp` · Rz(−90°), shifted 6.9 mm toward the flange, so poses and rotations the model sees are identical ([frames.py](guava/real/frames.py)) |
+| IK + joint interpolation | straight-line target for the CRISP cartesian impedance controller; a move that does not converge reports `blocked …` and holds the pose |
+| stall detection on finger joints | Franka Hand grasp action; `grasped` if the fingers stop more than 3 mm apart |
+| 512×512 rendered RGB-D | RealSense color + aligned depth, center-cropped and resized to 512×512 with matching intrinsics |
+| table offset from the scene model | `table_z` in [configs/real/franka.yaml](configs/real/franka.yaml) (estimated by `guava.real.check`) |
+
+The episode loop ([run.py](guava/real/run.py)) follows the Guava-4B evaluation protocol
+(`benchmark_compatible_tasks` with `sft_v13b_short.txt`): the same system prompt and
+first-turn tool listing, table-aligned coordinates, an observation after every action,
+first-tool-call parsing, and temperature 0.
+
+**1. Robot workstation** (see the pixi_fer_ros2 README, section *Guava*):
+
+```bash
+pixi run -e jazzy franka robot_ip:=<robot-ip>
+pixi run -e camera guava-camera          # third-person RealSense, depth aligned to color
+pixi run -e jazzy-crisp guava-bridge     # homes the arm, then serves on :8765
+```
+
+**2. GPU workstation**, using the environments from [Installation](#installation):
+
+```bash
+.venv-serve/bin/vllm serve AIcell/guava-v13b-qwen3.5-4b \
+  --revision 19a8c77544cf7c161966f49bbb2654b85c6b2fa3 \
+  --served-model-name AIcell/guava-v13b-qwen3.5-4b --host 127.0.0.1 --port 8000 \
+  --dtype bfloat16 --max-model-len 32768 --max-num-seqs 1 \
+  --gpu-memory-utilization 0.80 --limit-mm-per-prompt '{"image":31}'
+.venv-sam3/bin/python -m guava.scripts.sam3_server --port 8114 --device cuda
+```
+
+Set `bridge_url` in `configs/real/franka.yaml` to the robot workstation.
+
+**3. Calibrate and check** (again whenever the camera or the table moves):
+
+```bash
+.venv/bin/python -m guava.real.calibrate --marker-size 0.05   # ArUco on the hand -> camera extrinsics
+.venv/bin/python -m guava.real.check --object "red cube"      # overlay.png, table_z, SAM3 localization
+.venv/bin/python -m guava.real.check --hover "red cube"       # TCP 10 cm above the object
+```
+
+Paste the extrinsics printed by `calibrate` into the bridge config and restart the bridge.
+In `runs/real/check/overlay.png`, the red cross (projected TCP) must sit between the
+fingertips and the green grid on the tabletop.
+
+**4. Run episodes:**
+
+```bash
+.venv/bin/python -m guava.real.run --task "Put the lemon in the bin." \
+  --output runs/real/lemon_in_bin --episodes 10
+```
+
+Each physical action is shown and must be confirmed (`Enter` runs it, `v` vetoes it and the
+model sees an error, `q` ends the episode) until you pass `--no-confirm`. `Ctrl-C` stops
+the arm. After each episode you are asked whether the task succeeded. Logs, images and
+per-call latency go to `runs/real/<name>/episode_XXX/`. Keep the Franka user stop at hand:
+the bridge rejects targets outside its safety box, but it does not check collisions.
+
+Camera placement matters: the model was trained on the simulator `frontview`, about
+2.2 m in front of the robot base and 0.65 m above the table, looking back at the robot.
+Place the real camera on that side, with the whole workspace in view. Depth quality
+drives grasp accuracy. A D405 is specified for 7–50 cm, so at a front-view distance a
+D435/D455-class camera, or a closer D405 with a narrower view, will localize much better.
 
 ![Zero-shot real-world evaluation on nine tasks: GPT-5.4 achieves 93.3% overall success, Qwen3.5-4B 28.9%, and Guava-4B 90.0%.](assets/images/guava_realworld_arxiv.png)
 

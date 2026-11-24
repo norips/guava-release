@@ -1,0 +1,22 @@
+# Real Franka Panda (pixi_fer_ros2) for guava.real.{run,check,calibrate}. See README "Real-world deployment".
+bridge_url: http://127.0.0.1:8765        # robot workstation running `pixi run -e jazzy-crisp guava-bridge`
+sam3_url: http://127.0.0.1:8114
+llm_url: http://127.0.0.1:8000/v1
+model: AIcell/guava-v13b-qwen3.5-4b      # served model name in vLLM
+
+# Tabletop height in the robot base frame (panda_link0) [m]: 0 when the robot stands on the table.
+# `python -m guava.real.check` prints an estimate from the depth image.
+table_z: 0.0
+
+image_size: 512          # simulator resolution the model was trained on
+crop: null               # [x0, y0, w, h] in the camera image; null = centered square
+max_depth: 2.5           # [m]
+
+grasp: pca               # pca (default in the paper's harness) | graspgen
+graspgen_url: tcp://127.0.0.1:5556
+grasp_force: null        # [N] null = bridge default
+min_grasp_width: 0.003   # [m] finger opening after a grasp below which it reports "closed" (nothing held)
+linear_speed: null       # [m/s] null = bridge default
+
+# Guava / robosuite home configuration (must match `robot.home_joints` of the bridge config).
+home_joints: [0.0, -0.0873, 0.0, -2.618, 0.0, 2.6516, 0.7854]
